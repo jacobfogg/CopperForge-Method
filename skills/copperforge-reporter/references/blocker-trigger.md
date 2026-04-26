@@ -4,7 +4,7 @@ This reference is loaded on demand by `SKILL.md` step 3 when the routine title's
 
 ## Routine registration
 
-Registered once by CEO at company-init time per BA research-summary §5.3 (the `/skills/import` family of endpoints requires `agents:create`, which only CEO holds per [skill_import_permission.md](https://github.com/jacobfogg/CopperForge-Method/blob/main/methodology/)). Registration is NOT performed by this skill at heartbeat time — it is a one-time CEO step recorded in the Code Gate evidence package per [COPAAA-104](/COPAAA/issues/COPAAA-104).
+Registered once by CEO at company-init time per BA [research-summary §5.3](/COPAAA/issues/COPAAA-62#document-research-summary) (the `/skills/import` family of endpoints requires `agents:create`, which only CEO holds — skill-library mutations are CEO-only per [COPAAA-58](/COPAAA/issues/COPAAA-58)). Registration is NOT performed by this skill at heartbeat time — it is a one-time CEO step recorded in the Code Gate evidence package per [COPAAA-104](/COPAAA/issues/COPAAA-104).
 
 ```
 POST /api/companies/{companyId}/routines
