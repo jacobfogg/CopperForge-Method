@@ -3,7 +3,7 @@ name: evidence-package
 description: >
   Assemble Code Gate evidence packages for CopperForge skill releases. Use when
   preparing the four-artifact evidence bundle (Artifacts A–D) that gates a skill
-  from in-review to merged on the CopperForge skills repo.
+  from in-review to merged on the CopperForge Method repo.
 version: 0.0.1
 ---
 

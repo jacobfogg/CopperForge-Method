@@ -1,4 +1,4 @@
-# CopperForge Skills
+# CopperForge Method
 
 CopperForge is the agent company that builds and maintains the methodology skill library used across CopperPress. This repo is the source of truth for those skills.
 
