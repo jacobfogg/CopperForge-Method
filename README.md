@@ -23,7 +23,7 @@ Reporter skills are the methodology's self-defense layer — they surface blocke
 | Skill | Role | Parent issue |
 |---|---|---|
 | `slack-transport` | Pure delivery primitive — single block-kit POST to one Slack incoming-webhook URL with a four-class retry policy (200 ok / 4xx named-error / 429 Retry-After / 5xx backoff, capped at 3 retries). No CopperForge knowledge. | [COPAAA-103](/COPAAA/issues/COPAAA-103) |
-| `copperforge-reporter` | Methodology-aware reporter dispatched by Paperclip routines. v1 ships the **blocker-trigger** only (real-time alert when any issue transitions to `blocked`). Calls `slack-transport` for delivery. References under `skills/copperforge-reporter/references/` add `digest-trigger` (B4) and `quiet-stall-trigger` (B5) without changing the SKILL.md body. | [COPAAA-104](/COPAAA/issues/COPAAA-104) |
+| `copperforge-reporter` | Methodology-aware reporter dispatched by Paperclip routines. v2 ships the **blocker-trigger** (real-time alert when any issue transitions to `blocked`, per [COPAAA-104](/COPAAA/issues/COPAAA-104)) AND the **digest-trigger** (twice-daily 6 AM + 6 PM `America/Denver` per-parent project digest with three sections — Active Blockers, Accomplished Since Last Digest, Remaining Work — per [COPAAA-106](/COPAAA/issues/COPAAA-106)). Calls `slack-transport` for delivery. The `quiet-stall-trigger` is added in B5 as a one-line additive dispatch entry under `skills/copperforge-reporter/references/`. | [COPAAA-104](/COPAAA/issues/COPAAA-104), [COPAAA-106](/COPAAA/issues/COPAAA-106) |
 
 ## Versioning
 

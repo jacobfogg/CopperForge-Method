@@ -1,8 +1,8 @@
 # copperforge-reporter — Slack payload shapes (block-kit)
 
-This reference owns every block-kit composition the reporter emits. `SKILL.md` and the per-trigger references (e.g., `blocker-trigger.md`) consume these shapes by name and pass through the result to `slack-transport` as the `message` argument. v1 ships exactly one shape — `blocker-alert`. B4 will add `digest-summary` (three-section daily digest) and B5 will add `quiet-stall-alert` to this same file without touching `SKILL.md` or `blocker-trigger.md`.
+This reference owns every block-kit composition the reporter emits. `SKILL.md` and the per-trigger references (e.g., `blocker-trigger.md`, `digest-trigger.md`) consume these shapes by name and pass through the result to `slack-transport` as the `message` argument. v2 ships two shapes — `blocker-alert` (used by `blocker-trigger`) and `digest-summary` (used by `digest-trigger`). B5 will add `quiet-stall-alert` to this same file without touching `SKILL.md`, `blocker-trigger.md`, or `digest-trigger.md`.
 
-This file is the single place the reporter knows about Slack block-kit. `slack-transport` is intentionally Slack-shape-agnostic ([COPAAA-103 SKILL.md preconditions](/COPAAA/issues/COPAAA-103): *"the skill does NOT validate the block-kit shape"*) — composition lives upstream, here. Any block-kit logic appearing in `SKILL.md` or in `blocker-trigger.md` is gate-failing on the body-narrowness rule documented in `SKILL.md`'s quality bar.
+This file is the single place the reporter knows about Slack block-kit. `slack-transport` is intentionally Slack-shape-agnostic ([COPAAA-103 SKILL.md preconditions](/COPAAA/issues/COPAAA-103): *"the skill does NOT validate the block-kit shape"*) — composition lives upstream, here. Any block-kit logic appearing in `SKILL.md`, `blocker-trigger.md`, or `digest-trigger.md` is gate-failing on the body-narrowness rule documented in `SKILL.md`'s quality bar.
 
 ## Block-kit reference (cited authority)
 
@@ -115,20 +115,124 @@ Composed body (block-kit object passed verbatim to `slack-transport` as `message
 - The `context` block carries the run-id and activity-id metadata. This is intentionally a `context` block (not a `section`) because Slack renders `context` in a smaller font and dimmer color — operationally the right cue that this is metadata, not the alert content. Operators reading the audit trail in the channel can correlate the fire to the per-issue idempotence sentinel via `activityId`.
 - Total block count: 4 (header + section-fields + section-context + context-metadata). Well under the 50-block-per-message Slack cap (BA §1.3, Verified).
 
+## Shape: `digest-summary` (v2)
+
+Consumed by `references/digest-trigger.md` step 5 ("Per-parent: compose and deliver"). One `digest-summary` Slack message is composed and delivered per parent in the resolved parent set per fire (twice daily at 6 AM + 6 PM `America/Denver`). Inputs:
+
+- `parentIdentifier` (string) — e.g., `COPAAA-61`.
+- `parentTitle` (string) — full parent issue title.
+- `parentPriority` (string) — `critical | high | medium | low`.
+- `fireWallClock` (string) — wall-clock fire timestamp formatted in the configured timezone, e.g., `2026-04-26 06:00 America/Denver` (the digest-trigger reference computes this from the routine's `nextRunAt` + `digestTimezone`).
+- `activeBlockers` (array) — entries from digest-trigger step 4 section A. Each entry: `{ identifier, title, priority, assigneeAgentName? }`.
+- `accomplished` (array) — entries from digest-trigger step 4 section B. Each entry: `{ identifier, title, completedAt }` where `completedAt` is the `details.createdAt` of the `done` activity event, formatted in the configured timezone.
+- `remainingWork` (array) — entries from digest-trigger step 4 section C. Each entry: `{ identifier, title, status, priority, assigneeAgentName? }` where `status ∈ {todo, in_progress}`.
+- `deepLink` (string) — `https://{paperclip-instance-host}/issues/{parentIdentifier}`. Same instance-host resolution rule as `blocker-alert` (rewrite from API URL to UI URL with API-URL fallback).
+
+Composed body (block-kit object passed verbatim to `slack-transport` as `message`):
+
+```json
+{
+  "text": "📊 Project Digest: {parentIdentifier} — {fireWallClock}",
+  "blocks": [
+    {
+      "type": "header",
+      "text": {
+        "type": "plain_text",
+        "text": "📊 Project Digest: {parentIdentifier} — {parentTitle}",
+        "emoji": true
+      }
+    },
+    {
+      "type": "context",
+      "elements": [
+        {
+          "type": "mrkdwn",
+          "text": "Fire: {fireWallClock} — Parent: <{deepLink}|{parentIdentifier}> — Priority: {parentPriority}"
+        }
+      ]
+    },
+    { "type": "divider" },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*Active Blockers* ({|activeBlockers|})\n{activeBlockersRendered}"
+      }
+    },
+    { "type": "divider" },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*Accomplished Since Last Digest* ({|accomplished|})\n{accomplishedRendered}"
+      }
+    },
+    { "type": "divider" },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*Remaining Work* ({|remainingWork|})\n{remainingWorkRendered}"
+      }
+    },
+    {
+      "type": "context",
+      "elements": [
+        {
+          "type": "mrkdwn",
+          "text": "Reporter digest-trigger fire — runId `{runId}` — fireKey `{fireKey}`"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Per-section rendering rules.** Each of the three section bodies (`activeBlockersRendered`, `accomplishedRendered`, `remainingWorkRendered`) is a `mrkdwn` string built from the input array using these formats — one entry per line, prefixed with `• ` (U+2022 bullet) for visual scan:
+
+- `activeBlockersRendered` — per entry: `• <{deepLink-for-entry}|{identifier}> _{priority}_ — {title} (assignee: {assigneeAgentName | 'unassigned'})`. Empty array renders the literal `_(none — methodology is unblocked)_` (italicized, mrkdwn).
+- `accomplishedRendered` — per entry: `• <{deepLink-for-entry}|{identifier}> — {title} _(done {completedAt})_`. Empty array renders the literal `_(none — no issues transitioned to done in this window)_`.
+- `remainingWorkRendered` — per entry: `• <{deepLink-for-entry}|{identifier}> _{status}_ _{priority}_ — {title} (assignee: {assigneeAgentName | 'unassigned'})`. Empty array renders the literal `_(none — parent has no open work)_`.
+
+**Composition rules:**
+
+- The `text` field at top-level is the notification fallback per Slack's webhook contract. Format: `📊 Project Digest: {parentIdentifier} — {fireWallClock}`. Capped at 200 chars total; truncate the `fireWallClock` portion (rare) by retaining the date and dropping the timezone suffix if the combined length exceeds 200 chars.
+- The header block uses `📊` (U+1F4CA bar chart) as the visual marker for digest messages, distinct from the `🚧` blocker-alert marker. Operators monitoring the channel can pre-attentively distinguish digest messages from blocker alerts by emoji alone.
+- The first context block (after the header) carries the fire metadata — wall-clock, parent deep link, parent priority. This is `context` (not `section`) because Slack renders `context` smaller and dimmer, signaling that this is metadata about the digest rather than digest content itself.
+- The three primary sections (Active Blockers, Accomplished Since Last Digest, Remaining Work) are separated by `divider` blocks for visual scan. Each section is a `section` block whose `mrkdwn` text begins with the bolded section heading, includes the section count in parentheses (e.g., `*Active Blockers* (3)`), and lists entries one-per-line.
+- The trailing `context` block carries the runId + fireKey audit metadata, mirroring the `blocker-alert` trailing-context pattern — operators can correlate the Slack message to the per-parent idempotence sentinel via `fireKey`.
+- Total block count: 9 (header + context-meta + 3 × (divider + section) + context-audit). Well under the 50-block-per-message Slack cap (BA §1.3, Verified). Adding a fourth digest section in a future schema bump is feasible without breaching the block cap.
+- Per-entry truncation: each `{title}` in the rendered lists is capped at the same 100-char issue-title cap used by `blocker-alert`. If the assembled section `mrkdwn` text would exceed the 3000-char section cap, the rendered list is truncated at the entry boundary before the cap is reached and the literal phrase `… and {N} more (see Paperclip)` is appended (where `N` is the count of un-rendered entries). This entry-boundary truncation preserves alignment of the bullet list and avoids splitting an entry mid-line.
+- mrkdwn-escape Paperclip-sourced strings (titles, assignee names) per the same escape map as `blocker-alert`: `&` → `&amp;`, `<` → `&lt;`, `>` → `&gt;`. URLs are NOT escaped.
+
 ## Shape stability and additivity
 
-Future trigger references (B4 `digest-summary`, B5 `quiet-stall-alert`) add NEW shape definitions in this file as new H2 sections (e.g., `## Shape: digest-summary (v2)`). They do NOT modify the `blocker-alert` shape. This additivity is the same principle `SKILL.md` step 2 follows for the dispatch table — once a shape ships at a given commit SHA, its block-kit body is contractually frozen until a documented schema bump under the corresponding per-skill Code Gate (parallel to the [COPAAA-103](/COPAAA/issues/COPAAA-103) result-envelope shape-stability discipline).
+Future trigger references (B5 `quiet-stall-alert`) add NEW shape definitions in this file as new H2 sections (e.g., `## Shape: quiet-stall-alert (v3)`). They do NOT modify the `blocker-alert` or `digest-summary` shapes. This additivity is the same principle `SKILL.md` step 2 follows for the dispatch table — once a shape ships at a given commit SHA, its block-kit body is contractually frozen until a documented schema bump under the corresponding per-skill Code Gate (parallel to the [COPAAA-103](/COPAAA/issues/COPAAA-103) result-envelope shape-stability discipline).
 
-The shape-stability invariant exists because operators tune their channel-monitoring rules (e.g., Slack channel routing, escalation triggers, on-call paging) against specific block-kit field positions and labels. Silent reshaping of the v1 `blocker-alert` body would invalidate those rules without warning; explicit schema bumps give operators a heads-up.
+The shape-stability invariant exists because operators tune their channel-monitoring rules (e.g., Slack channel routing, escalation triggers, on-call paging) against specific block-kit field positions and labels. Silent reshaping of the v1 `blocker-alert` body or the v2 `digest-summary` body would invalidate those rules without warning; explicit schema bumps give operators a heads-up.
 
 ## Pattern-match phrases (for QA2 Test Gate rubric)
 
-QA2's per-skill Test Gate rubric pattern-matches the literal phrases below in the `blocker-alert` shape's composed output:
+QA2's per-skill Test Gate rubric pattern-matches the literal phrases below in the composed output of each shape.
+
+`blocker-alert` shape:
 
 - `🚧 [BLOCKED]` — header prefix (T-shape-header).
 - `*What's blocking*` — third section heading (T-shape-context-heading).
 - `Reporter blocker-trigger fire — runId` — context-block prefix (T-shape-metadata).
 - `…` (U+2026 ellipsis) — truncation marker, present iff a per-field cap was hit (T-shape-truncation).
 - `_(no blocker context comment found — see issue description)_` — empty-context fallback (T-shape-empty-context).
+
+`digest-summary` shape:
+
+- `📊 Project Digest:` — header prefix (T-digest-shape-header).
+- `*Active Blockers*` — section A heading (T-digest-shape-section-a).
+- `*Accomplished Since Last Digest*` — section B heading (T-digest-shape-section-b).
+- `*Remaining Work*` — section C heading (T-digest-shape-section-c).
+- `Reporter digest-trigger fire — runId` — trailing-context prefix (T-digest-shape-metadata).
+- `_(none — methodology is unblocked)_` — empty section A fallback (T-digest-shape-empty-a).
+- `_(none — no issues transitioned to done in this window)_` — empty section B fallback (T-digest-shape-empty-b).
+- `_(none — parent has no open work)_` — empty section C fallback (T-digest-shape-empty-c).
+- `… and ` — entry-boundary section-cap truncation marker (T-digest-shape-section-truncation).
 
 Each phrase is a stable test-surface contract. Rephrasing any of them collapses the QA2 test rubric and is gate-failing on the canonical-phrase rule documented in `SKILL.md`'s quality bar.
