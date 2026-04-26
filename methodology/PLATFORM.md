@@ -150,6 +150,24 @@ CopperForge agents use a shared library of skills hosted at `https://github.com/
 
 Plus the `slack-transport` and `copperforge-reporter` skills, separately maintained, which together post real-time blocker alerts, twice-daily digests, and quiet-stall alerts. And the `queue-status` skill, which feeds the reporter.
 
+### `methodology-bootstrap` (CEO-only)
+
+Operational mechanism for installing, upgrading, and drift-checking the CopperForge methodology in a Paperclip company against a version pinned in this repo. CEO-only by design — methodology is founding configuration, and changes to founding configuration require board approval. Restricting the skill to CEO makes the chain of authority structural rather than relying on discipline.
+
+- **Access**: CEO only. Other roles cannot invoke. Enforcement is part of the skill.
+- **Operations**:
+  - `install` — one-time setup on a fresh company against a pinned version (no board approval; the version was already board-approved when it was released).
+  - `upgrade` — moves a company from one pinned version to another. **Board approval required before applying.** The skill issues a Paperclip approval request with a structured diff and waits.
+  - `drift-check` — read-only audit comparing the company's current files against the pinned version. Never modifies. Surfaces drift as an issue and (when the reporter is available) a board alert.
+- **Invocation pattern**:
+  - `methodology-bootstrap install --company {id} --version v1.0.0`
+  - `methodology-bootstrap upgrade --company {id} --to v1.1.0`
+  - `methodology-bootstrap drift-check --company {id}`
+- **Manifest**: per-company state at `companies/{id}/methodology.json`. Records the installed version and per-file SHAs so `drift-check` can compare without re-fetching the source repo on every run, and so `upgrade` can compute a precise diff.
+- **Source**: registered from this repo, `jacobfogg/CopperForge-Method`, at the same tag the company is being installed against.
+
+Non-negotiables: CEO-only access, board approval on every upgrade, version pinning on every operation (no `--latest`).
+
 Role docs reference these skills by name. Agents invoke them from the registered git source.
 
 ## Escalation Paths
