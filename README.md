@@ -22,9 +22,9 @@ Operator skills are CEO-only and act on a target Paperclip company's installatio
 
 | Skill | Supported operations | Parent issue |
 |---|---|---|
-| `methodology-bootstrap` | `install` | [COPAAA-58](/COPAAA/issues/COPAAA-58) |
+| `methodology-bootstrap` | `install`, `drift-check` | [COPAAA-58](/COPAAA/issues/COPAAA-58) |
 
-The `upgrade` (board-approval gated) and `drift-check` (read-only) operations of `methodology-bootstrap` accumulate onto this row as they land via [COPAAA-69](/COPAAA/issues/COPAAA-69) and [COPAAA-79](/COPAAA/issues/COPAAA-79) respectively, per the COPAAA-58 plan §4 C4 single-row convention.
+The `drift-check` (read-only) operation of `methodology-bootstrap` landed via [COPAAA-79](/COPAAA/issues/COPAAA-79); it re-hashes every manifest entry against on-disk content (zero GitHub network calls, zero writes) and posts either a quiet no-drift comment or a structured drift report plus a follow-up issue with two recommended responses (revert-to-canonical or formalize as methodology-repo PR). The `upgrade` (board-approval gated) operation lands in parallel via [COPAAA-69](/COPAAA/issues/COPAAA-69); the merged integration commit accumulates the final operations row to `install, upgrade, drift-check` per the COPAAA-58 plan §4 C4 single-row convention.
 
 ## Versioning
 
